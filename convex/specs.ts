@@ -2,9 +2,10 @@
 
 import { v } from "convex/values";
 import { action, internalAction, internalMutation, query } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 import SwaggerParser from "swagger-parser";
 import { ParsedSpec, Endpoint, Model, AuthMethod, Parameter, RequestBody, Response, Schema } from "../types";
+import { Id } from "./_generated/dataModel";
 
 // Helper class for parsing, moved to the backend
 class SpecParser {
@@ -39,7 +40,7 @@ export const parseSpec = action({
     version: v.string(),
     sessionId: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<Id<"specs">> => {
     const specId = await ctx.runMutation(internal.specs.createPlaceholder, {
       name: args.name,
       type: args.type,

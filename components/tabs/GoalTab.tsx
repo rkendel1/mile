@@ -16,21 +16,19 @@ const GoalTab: React.FC<GoalTabProps> = ({ contextState, onContextUpdate }) => {
     ? contextState.goals[contextState.currentGoal] 
     : null;
 
-  const currentSpec = contextState.currentSpec 
-    ? contextState.specs[contextState.currentSpec] 
-    : null;
+  const specIsLoaded = !!contextState.currentSpec;
 
   return (
     <div className="tab-container goal-tab">
       <h2>🎯 Goal & Planning</h2>
       
-      {!currentSpec && (
+      {!specIsLoaded && (
         <div className="warning-box">
           <p>⚠️ Please import an API spec first before defining your goal.</p>
         </div>
       )}
 
-      {currentSpec && !currentGoal && (
+      {specIsLoaded && !currentGoal && (
         <div className="goal-prompt">
           <p>Describe what you want to build in the chat...</p>
           <div className="example-goals">

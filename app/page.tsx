@@ -3,8 +3,11 @@
 import React, { useState } from 'react';
 import ChatPanel from '@/components/ChatPanel';
 import WorkspacePanel from '@/components/WorkspacePanel';
-import { ChatContext, ContextState, DocId } from '@/types';
+import { ChatContext, ContextState, DocId, APISpec } from '@/types';
 import '@/styles/App.css';
+import { useQuery } from 'convex/react';
+import { api } from '@/convex/_generated/api';
+import { Id } from '@/convex/_generated/dataModel';
 
 export default function Home() {
   const [sessionId] = useState(`session-${Date.now()}`);
@@ -17,6 +20,10 @@ export default function Home() {
     components: {},
     chatHistory: [],
   });
+
+  const currentSpec = useQuery(api.specs.get, { 
+    id: contextState.currentSpec as Id<"specs"> | undefined 
+  }) as APISpec | null;
 
   const handleTabChange = (tab: ChatContext['activeTab']) => {
     setContext({ ...context, activeTab: tab });
@@ -37,12 +44,14 @@ export default function Home() {
           context={context}
           contextState={contextState}
           onContextUpdate={handleContextUpdate}
+          currentSpec={currentSpec}
         />
         <WorkspacePanel 
           context={context}
           contextState={contextState}
           onTabChange={handleTabChange}
           onContextUpdate={handleContextUpdate}
+          sessionId={sessionId}
         />
       </div>
     </main>
