@@ -1,0 +1,79 @@
+.workspace-panel {
+  background: var(--bg-dark);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.workspace-tabs {
+  display: flex;
+  gap: 0;
+  background: var(--bg-darker);
+  border-bottom: 2px solid var(--border-color);
+  padding: 0 1rem;
+}
+
+.workspace-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 1.2rem 1.5rem;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-bottom: 3px solid transparent;
+}
+
+.workspace-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-lighter);
+}
+
+.workspace-tab.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+  background: var(--bg-dark);
+}
+
+.tab-icon {
+  font-size: 1.4rem;
+}
+
+.tab-label {
+  font-weight: 600;
+}
+
+.workspace-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem;
+}
+
+.workspace-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.workspace-content::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+}
+
+.workspace-content::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+@media (max-width: 768px) {
+  .tab-label {
+    display: none;
+  }
+  
+  .workspace-tab {
+    padding: 1rem;
+  }
+}
