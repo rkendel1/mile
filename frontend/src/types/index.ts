@@ -143,3 +143,28 @@ export interface ChatAction {
   type: string;
   [key: string]: any;
 }
+
+// API Response Types
+export interface ParseSpecSuccessResponse {
+  success: true;
+  spec: {
+    id: string;
+    name: string;
+    version: string;
+    type: string;
+    endpoints: number;
+    models: number;
+    authMethods: number;
+  };
+}
+
+export interface ParseSpecErrorResponse {
+  success: false;
+  error: string;
+}
+
+export type ParseSpecResponse = ParseSpecSuccessResponse | ParseSpecErrorResponse;
+
+export interface GetSpecResponse {
+  spec: APISpec;
+}

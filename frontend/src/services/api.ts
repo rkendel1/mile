@@ -1,19 +1,23 @@
+import { GetSpecResponse, ParseSpecResponse } from '../types';
+
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
 export const apiService = {
   // Spec endpoints
-  async parseSpec(content: any, type: string, name: string, version: string) {
+  async parseSpec(content: any, type: string, name: string, version: string): Promise<ParseSpecResponse> {
     const response = await fetch(`${API_BASE_URL}/spec/parse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content, type, name, version }),
     });
-    return response.json();
+    const data: ParseSpecResponse = await response.json();
+    return data;
   },
 
-  async getSpec(id: string) {
+  async getSpec(id: string): Promise<GetSpecResponse> {
     const response = await fetch(`${API_BASE_URL}/spec/${id}`);
-    return response.json();
+    const data: GetSpecResponse = await response.json();
+    return data;
   },
 
   async listSpecs() {

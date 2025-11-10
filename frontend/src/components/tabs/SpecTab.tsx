@@ -11,9 +11,10 @@ interface SpecTabProps {
 const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
   const [uploading, setUploading] = useState(false);
   const [specType, setSpecType] = useState<'openapi' | 'swagger' | 'graphql'>('openapi');
+  const [pastedSpec, setPastedSpec] = useState('');
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const file = event.currentTarget.files?.[0];
     if (!file) return;
 
     setUploading(true);
@@ -24,7 +25,6 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
       try {
         content = JSON.parse(text);
       } catch {
-        // If not JSON, try YAML (simplified)
         content = text;
       }
 
@@ -41,10 +41,53 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
           specs: { ...contextState.specs, [result.spec.id]: specData.spec },
           currentSpec: result.spec.id,
         });
+      } else {
+        alert(`Failed to parse API spec: ${result.error || 'Please check the file format.'}`);
       }
     } catch (error) {
       console.error('Error uploading spec:', error);
       alert('Failed to parse API spec. Please check the file format.');
+    } finally {
+      setUploading(false);
+      event.currentTarget.value = '';
+    }
+  };
+
+  const handleParsePastedSpec = async () => {
+    if (!pastedSpec.trim()) {
+      alert('Please paste a spec first.');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      let content;
+      try {
+        content = JSON.parse(pastedSpec);
+      } catch {
+        content = pastedSpec;
+      }
+
+      const result = await apiService.parseSpec(
+        content,
+        specType,
+        'Pasted Spec',
+        '1.0.0'
+      );
+
+      if (result.success) {
+        const specData = await apiService.getSpec(result.spec.id);
+        onContextUpdate({
+          specs: { ...contextState.specs, [result.spec.id]: specData.spec },
+          currentSpec: result.spec.id,
+        });
+        setPastedSpec('');
+      } else {
+        alert(`Failed to parse API spec: ${result.error || 'Please check the format and content.'}`);
+      }
+    } catch (error) {
+      console.error('Error parsing spec:', error);
+      alert('Failed to parse API spec. Please check the format and content.');
     } finally {
       setUploading(false);
     }
@@ -63,7 +106,7 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
         <div className="upload-controls">
           <select 
             value={specType} 
-            onChange={(e) => setSpecType(e.target.value as any)}
+            onChange={(e) => setSpecType(e.currentTarget.value as any)}
             className="spec-type-select"
           >
             <option value="openapi">OpenAPI 3.x</option>
@@ -79,10 +122,27 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
               disabled={uploading}
               style={{ display: 'none' }}
             />
-            <button className="btn btn-primary" disabled={uploading}>
+            <button className="btn btn-primary" disabled={uploading} onClick={() => document.querySelector<HTMLInputElement>('input[type="file"]')?.click()}>
               {uploading ? '⏳ Parsing...' : '📁 Choose File'}
             </button>
           </label>
+        </div>
+        <div className="paste-spec-section">
+          <textarea
+            className="spec-paste-area"
+            placeholder="Or paste your spec here (JSON or YAML)"
+            value={pastedSpec}
+            onChange={(e) => setPastedSpec(e.currentTarget.value)}
+            disabled={uploading}
+            rows={10}
+          />
+          <button 
+            className="btn btn-secondary" 
+            onClick={handleParsePastedSpec}
+            disabled={uploading || !pastedSpec.trim()}
+          >
+            {uploading ? '⏳ Parsing...' : '📝 Parse Pasted Spec'}
+          </button>
         </div>
       </div>
 
