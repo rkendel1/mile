@@ -14,6 +14,15 @@ export const apiService = {
     return data;
   },
 
+  async parseSpecFromUrl(url: string, type: string): Promise<ParseSpecResponse> {
+    const response = await fetch(`${API_BASE_URL}/spec/parse-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, type }),
+    });
+    return response.json();
+  },
+
   async getSpec(id: string): Promise<GetSpecResponse> {
     const response = await fetch(`${API_BASE_URL}/spec/${id}`);
     const data: GetSpecResponse = await response.json();

@@ -12,6 +12,7 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
   const [uploading, setUploading] = useState(false);
   const [specType, setSpecType] = useState<'openapi' | 'swagger' | 'graphql'>('openapi');
   const [pastedSpec, setPastedSpec] = useState('');
+  const [specUrl, setSpecUrl] = useState('');
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -93,6 +94,34 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
     }
   };
 
+  const handleFetchFromUrl = async () => {
+    if (!specUrl.trim()) {
+      alert('Please enter a URL.');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const result = await apiService.parseSpecFromUrl(specUrl, specType);
+
+      if (result.success) {
+        const specData = await apiService.getSpec(result.spec.id);
+        onContextUpdate({
+          specs: { ...contextState.specs, [result.spec.id]: specData.spec },
+          currentSpec: result.spec.id,
+        });
+        setSpecUrl('');
+      } else {
+        alert(`Failed to parse API spec from URL: ${result.error || 'Please check the URL and spec format.'}`);
+      }
+    } catch (error) {
+      console.error('Error fetching spec from URL:', error);
+      alert('Failed to parse API spec from URL. Please check the URL and spec format.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const currentSpec = contextState.currentSpec 
     ? contextState.specs[contextState.currentSpec] 
     : null;
@@ -127,6 +156,25 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
             </button>
           </label>
         </div>
+
+        <div className="url-spec-section">
+          <input
+            type="url"
+            className="spec-url-input"
+            placeholder="Or paste a URL to your spec"
+            value={specUrl}
+            onChange={(e) => setSpecUrl(e.currentTarget.value)}
+            disabled={uploading}
+          />
+          <button
+            className="btn btn-secondary"
+            onClick={handleFetchFromUrl}
+            disabled={uploading || !specUrl.trim()}
+          >
+            {uploading ? '⏳ Fetching...' : '🔗 Fetch from URL'}
+          </button>
+        </div>
+
         <div className="paste-spec-section">
           <textarea
             className="spec-paste-area"
