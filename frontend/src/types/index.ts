@@ -7,6 +7,7 @@ export interface APISpec {
   parsed: ParsedSpec;
   suggestedFlows?: string[];
   createdAt: string;
+  apiKey?: string;
 }
 
 export interface ParsedSpec {

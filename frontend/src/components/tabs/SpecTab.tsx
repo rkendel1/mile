@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ContextState } from '../../types';
 import { apiService } from '../../services/api';
 import '../../styles/Tabs.css';
@@ -13,6 +13,17 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
   const [specType, setSpecType] = useState<'openapi' | 'swagger' | 'graphql'>('openapi');
   const [pastedSpec, setPastedSpec] = useState('');
   const [specUrl, setSpecUrl] = useState('');
+  const [apiKey, setApiKey] = useState('');
+
+  const currentSpec = contextState.currentSpec 
+    ? contextState.specs[contextState.currentSpec] 
+    : null;
+
+  useEffect(() => {
+    if (currentSpec) {
+      setApiKey(currentSpec.apiKey || '');
+    }
+  }, [currentSpec]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -122,9 +133,23 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
     }
   };
 
-  const currentSpec = contextState.currentSpec 
-    ? contextState.specs[contextState.currentSpec] 
-    : null;
+  const handleSaveApiKey = async () => {
+    if (!currentSpec) return;
+    try {
+      await apiService.setApiKey(currentSpec.id, apiKey);
+      const updatedSpec = { ...currentSpec, apiKey };
+      onContextUpdate({
+        specs: {
+          ...contextState.specs,
+          [currentSpec.id]: updatedSpec,
+        },
+      });
+      alert('API Key saved!');
+    } catch (error) {
+      console.error('Failed to save API key:', error);
+      alert('Failed to save API key.');
+    }
+  };
 
   return (
     <div className="tab-container spec-tab">
@@ -213,6 +238,26 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
               <div className="stat-icon">🔐</div>
               <div className="stat-value">{currentSpec.parsed.authMethods.length}</div>
               <div className="stat-label">Auth Methods</div>
+            </div>
+          </div>
+
+          <div className="api-key-section">
+            <h4>API Key / Bearer Token</h4>
+            <p>If your API requires authentication, enter the key here. It will be used in the Test tab.</p>
+            <div className="api-key-input-group">
+              <input
+                type="password"
+                className="api-key-input"
+                placeholder="Enter your API key or token"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+              />
+              <button
+                className="btn btn-secondary"
+                onClick={handleSaveApiKey}
+              >
+                Save Key
+              </button>
             </div>
           </div>
 

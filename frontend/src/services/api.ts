@@ -39,6 +39,15 @@ export const apiService = {
     return response.json();
   },
 
+  async setApiKey(id: string, apiKey: string) {
+    const response = await fetch(`${API_BASE_URL}/spec/${id}/apikey`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey }),
+    });
+    return response.json();
+  },
+
   // Chat endpoints
   async sendMessage(message: string, context: any, sessionId: string) {
     const response = await fetch(`${API_BASE_URL}/chat/message`, {

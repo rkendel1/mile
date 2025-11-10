@@ -116,6 +116,24 @@ apiSpecRouter.get('/:id', (req: Request, res: Response) => {
   res.json({ spec });
 });
 
+// Set API Key for a spec
+apiSpecRouter.put('/:id/apikey', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { apiKey } = req.body;
+
+  if (!specs[id]) {
+    return res.status(404).json({ error: 'Spec not found' });
+  }
+
+  if (typeof apiKey !== 'string') {
+    return res.status(400).json({ error: 'Invalid API key provided' });
+  }
+
+  specs[id].apiKey = apiKey;
+
+  res.json({ success: true, message: 'API key saved successfully.' });
+});
+
 // List all specs
 apiSpecRouter.get('/', (req: Request, res: Response) => {
   const specList = Object.values(specs).map(spec => ({
