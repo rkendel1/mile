@@ -3,6 +3,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChatMessage, ChatContext, ContextState, APISpec } from '@/types';
 import '@/styles/ChatPanel.css';
+import { useAction, useQuery } from 'convex/react';
+import { api } from '@/convex/_generated/api';
+import { Id } from '@/convex/_generated/dataModel';
 
 interface ChatPanelProps {
   sessionId: string;
@@ -13,93 +16,40 @@ interface ChatPanelProps {
 }
 
 const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, context, contextState, onContextUpdate, currentSpec }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const systemMsg: ChatMessage = {
-      id: `system-${Date.now()}`,
-      role: 'system',
-      content: getSystemMessage(context.activeTab, contextState, currentSpec),
-      timestamp: new Date().toISOString(),
-    };
-    setMessages(prev => [systemMsg]);
-  }, [context.activeTab, currentSpec, contextState.currentGoal, contextState.currentComponent]);
+  const messages = useQuery(api.chat.getMessagesForSession, { sessionId }) || [];
+  const sendMessage = useAction(api.chat.sendMessage);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const getSystemMessage = (tab: ChatContext['activeTab'], state: ContextState, spec: APISpec | null): string => {
-    switch (tab) {
-      case 'spec':
-        if (spec) {
-          return `The '${spec.name}' spec is loaded. You can analyze it here or move to the Goal tab to start building.`;
-        }
-        return "I'm ready to help you import and understand your API specification.";
-      case 'goal':
-        if (!state.currentSpec) {
-          return "Please import an API spec first before defining your goal.";
-        }
-        if (state.currentGoal) {
-          return "I've created a plan based on your goal. You can ask me to refine it, or we can proceed to the Test tab to validate the endpoints.";
-        }
-        return "Let's define what you want to build with this API.";
-      case 'test':
-        if (!state.currentGoal) {
-          return "Please define your goal first before testing endpoints.";
-        }
-        return "I can execute live API calls to validate the endpoints for your goal.";
-      case 'component':
-        if (!state.currentGoal) {
-          return "Let's define your goal and test the API first before generating components.";
-        }
-        return "I'll generate a fully functional UI component for you based on the plan and test results.";
-      case 'edit':
-        return "Make any changes you'd like - I'll keep everything in sync.";
-      default:
-        return "How can I help you today?";
-    }
-  };
-
   const handleSend = async () => {
     if (!input.trim() || loading) return;
 
-    const userMessage: ChatMessage = {
-      id: `msg-${Date.now()}-user`,
-      role: 'user',
-      content: input,
-      timestamp: new Date().toISOString(),
-      context,
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+    const messageToSend = input;
     setInput('');
     setLoading(true);
 
     try {
-      // This is now a mock response to fix the compile error.
-      // In a real implementation, this would call a Convex action.
-      const assistantMessage: ChatMessage = {
-        id: `msg-${Date.now()}-assistant`,
-        role: 'assistant',
-        content: `This is a mock response to your message: "${input}"`,
-        timestamp: new Date().toISOString(),
-        context: context,
-      };
+      const result = await sendMessage({
+        message: messageToSend,
+        sessionId,
+        context: {
+          activeTab: context.activeTab,
+          specId: contextState.currentSpec as Id<"specs"> | undefined,
+        },
+      });
 
-      setMessages(prev => [...prev, assistantMessage]);
+      if (result?.newGoalId) {
+        onContextUpdate({ currentGoal: result.newGoalId });
+      }
+      
     } catch (error) {
       console.error('Error sending message:', error);
-      const errorMessage: ChatMessage = {
-        id: `msg-${Date.now()}-error`,
-        role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
-        timestamp: new Date().toISOString(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setLoading(false);
     }
