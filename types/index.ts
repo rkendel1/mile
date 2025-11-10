@@ -1,12 +1,15 @@
+// Note: Using `string` for IDs here. In Convex functions, use `Id<"tableName">`.
+export type DocId = string;
+
 export interface APISpec {
-  id: string;
+  _id: DocId;
+  _creationTime: number;
   name: string;
   version: string;
   type: 'openapi' | 'swagger' | 'graphql';
   content: any;
-  parsed: ParsedSpec;
+  parsed?: ParsedSpec;
   suggestedFlows?: string[];
-  createdAt: string;
   apiKey?: string;
 }
 
@@ -90,14 +93,14 @@ export interface ChatMessage {
 
 export interface ChatContext {
   activeTab: 'spec' | 'goal' | 'test' | 'component' | 'edit';
-  specId?: string;
-  goalId?: string;
+  specId?: DocId;
+  goalId?: DocId;
   testResults?: TestResult[];
-  componentId?: string;
+  componentId?: DocId;
 }
 
 export interface Goal {
-  id: string;
+  id: DocId;
   description: string;
   plan: GoalPlan;
   status: 'pending' | 'in-progress' | 'completed';
@@ -158,7 +161,7 @@ export interface TestResult {
 }
 
 export interface Component {
-  id: string;
+  id: DocId;
   name: string;
   code: string;
   framework: 'react' | 'vue' | 'angular';
@@ -170,42 +173,11 @@ export interface Component {
 }
 
 export interface ContextState {
-  specs: { [id: string]: APISpec };
   goals: { [id: string]: Goal };
   tests: { [id: string]: TestResult[] };
   components: { [id: string]: Component };
-  currentSpec?: string;
-  currentGoal?: string;
-  currentComponent?: string;
+  currentSpec?: DocId;
+  currentGoal?: DocId;
+  currentComponent?: DocId;
   chatHistory: ChatMessage[];
-}
-
-export interface ChatAction {
-  type: string;
-  [key: string]: any;
-}
-
-// API Response Types
-export interface ParseSpecSuccessResponse {
-  success: true;
-  spec: {
-    id: string;
-    name: string;
-    version: string;
-    type: string;
-    endpoints: number;
-    models: number;
-    authMethods: number;
-  };
-}
-
-export interface ParseSpecErrorResponse {
-  success: false;
-  error: string;
-}
-
-export type ParseSpecResponse = ParseSpecSuccessResponse | ParseSpecErrorResponse;
-
-export interface GetSpecResponse {
-  spec: APISpec;
 }

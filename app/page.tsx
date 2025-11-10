@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import ChatPanel from '@/components/ChatPanel';
 import WorkspacePanel from '@/components/WorkspacePanel';
-import { ChatContext, ContextState } from '@/types';
+import { ChatContext, ContextState, DocId } from '@/types';
 import '@/styles/App.css';
 
 export default function Home() {
@@ -12,7 +12,6 @@ export default function Home() {
     activeTab: 'spec',
   });
   const [contextState, setContextState] = useState<ContextState>({
-    specs: {},
     goals: {},
     tests: {},
     components: {},
@@ -24,7 +23,10 @@ export default function Home() {
   };
 
   const handleContextUpdate = (updates: Partial<ContextState>) => {
-    setContextState({ ...contextState, ...updates });
+    setContextState(prevState => ({ ...prevState, ...updates }));
+    if (updates.currentSpec) {
+      setContext(prevContext => ({ ...prevContext, specId: updates.currentSpec as DocId }));
+    }
   };
 
   return (

@@ -14,6 +14,7 @@ interface WorkspacePanelProps {
   contextState: ContextState;
   onTabChange: (tab: ChatContext['activeTab']) => void;
   onContextUpdate: (updates: Partial<ContextState>) => void;
+  sessionId: string;
 }
 
 const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
@@ -21,6 +22,7 @@ const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
   contextState,
   onTabChange,
   onContextUpdate,
+  sessionId,
 }) => {
   const tabs: { id: ChatContext['activeTab']; label: string; icon: string }[] = [
     { id: 'spec', label: 'Spec', icon: '📋' },
@@ -33,7 +35,7 @@ const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
   const renderActiveTab = () => {
     switch (context.activeTab) {
       case 'spec':
-        return <SpecTab contextState={contextState} onContextUpdate={onContextUpdate} />;
+        return <SpecTab contextState={contextState} onContextUpdate={onContextUpdate} sessionId={sessionId} />;
       case 'goal':
         return <GoalTab contextState={contextState} onContextUpdate={onContextUpdate} />;
       case 'test':

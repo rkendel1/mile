@@ -1,17 +1,20 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ContextState, Schema, Endpoint, Parameter, Response, Model } from '@/types';
-import { apiService } from '@/services/api';
+import { ContextState, Schema, Endpoint, Parameter, Response, Model, APISpec } from '@/types';
 import SchemaViewer from '@/components/SchemaViewer';
 import '@/styles/Tabs.css';
+import { useAction, useQuery } from 'convex/react';
+import { api } from '@/convex/_generated/api';
+import { Id } from '@/convex/_generated/dataModel';
 
 interface SpecTabProps {
   contextState: ContextState;
   onContextUpdate: (updates: Partial<ContextState>) => void;
+  sessionId: string;
 }
 
-const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
+const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate, sessionId }) => {
   const [uploading, setUploading] = useState(false);
   const [specType, setSpecType] = useState<'openapi' | 'swagger' | 'graphql'>('openapi');
   const [pastedSpec, setPastedSpec] = useState('');
@@ -19,9 +22,12 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
   const [apiKey, setApiKey] = useState('');
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
 
-  const currentSpec = contextState.currentSpec 
-    ? contextState.specs[contextState.currentSpec] 
-    : null;
+  const parseSpecAction = useAction(api.specs.parseSpec);
+  const setApiKeyAction = useAction(api.specs.setApiKey);
+  
+  const currentSpec = useQuery(api.specs.get, { 
+    id: contextState.currentSpec as Id<"specs"> | undefined 
+  }) as APISpec | null;
 
   useEffect(() => {
     if (currentSpec) {
@@ -33,125 +39,54 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
     setExpandedItems(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const handleParse = async (content: any, name: string) => {
+    setUploading(true);
+    try {
+      const specId = await parseSpecAction({
+        content,
+        type: specType,
+        name,
+        version: '1.0.0',
+        sessionId,
+      });
+      onContextUpdate({ currentSpec: specId });
+    } catch (error) {
+      console.error('Error parsing spec:', error);
+      alert('Failed to parse API spec. Please check the console for details.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     if (!file) return;
-
-    setUploading(true);
-    try {
-      const text = await file.text();
-      let content;
-      
-      try {
-        content = JSON.parse(text);
-      } catch {
-        content = text;
-      }
-
-      const result = await apiService.parseSpec(
-        content,
-        specType,
-        file.name.replace(/\.(json|yaml|yml)$/, ''),
-        '1.0.0'
-      );
-
-      if (result.success) {
-        const specData = await apiService.getSpec(result.spec.id);
-        onContextUpdate({
-          specs: { ...contextState.specs, [result.spec.id]: specData.spec },
-          currentSpec: result.spec.id,
-        });
-      } else {
-        alert(`Failed to parse API spec: Please check the file format.`);
-      }
-    } catch (error) {
-      console.error('Error uploading spec:', error);
-      alert('Failed to parse API spec. Please check the file format.');
-    } finally {
-      setUploading(false);
-      event.currentTarget.value = '';
-    }
+    const text = await file.text();
+    let content;
+    try { content = JSON.parse(text); } catch { content = text; }
+    await handleParse(content, file.name.replace(/\.(json|yaml|yml)$/, ''));
+    event.currentTarget.value = '';
   };
 
   const handleParsePastedSpec = async () => {
-    if (!pastedSpec.trim()) {
-      alert('Please paste a spec first.');
-      return;
-    }
-
-    setUploading(true);
-    try {
-      let content;
-      try {
-        content = JSON.parse(pastedSpec);
-      } catch {
-        content = pastedSpec;
-      }
-
-      const result = await apiService.parseSpec(
-        content,
-        specType,
-        'Pasted Spec',
-        '1.0.0'
-      );
-
-      if (result.success) {
-        const specData = await apiService.getSpec(result.spec.id);
-        onContextUpdate({
-          specs: { ...contextState.specs, [result.spec.id]: specData.spec },
-          currentSpec: result.spec.id,
-        });
-        setPastedSpec('');
-      } else {
-        alert(`Failed to parse API spec: Please check the format and content.`);
-      }
-    } catch (error) {
-      console.error('Error parsing spec:', error);
-      alert('Failed to parse API spec. Please check the format and content.');
-    } finally {
-      setUploading(false);
-    }
+    if (!pastedSpec.trim()) return alert('Please paste a spec first.');
+    let content;
+    try { content = JSON.parse(pastedSpec); } catch { content = pastedSpec; }
+    await handleParse(content, 'Pasted Spec');
+    setPastedSpec('');
   };
 
   const handleFetchFromUrl = async () => {
-    if (!specUrl.trim()) {
-      alert('Please enter a URL.');
-      return;
-    }
-
-    setUploading(true);
-    try {
-      const result = await apiService.parseSpecFromUrl(specUrl, specType);
-
-      if (result.success) {
-        const specData = await apiService.getSpec(result.spec.id);
-        onContextUpdate({
-          specs: { ...contextState.specs, [result.spec.id]: specData.spec },
-          currentSpec: result.spec.id,
-        });
-        setSpecUrl('');
-      } else {
-        alert(`Failed to parse API spec from URL: Please check the URL and spec format.`);
-      }
-    } catch (error) {
-      console.error('Error fetching spec from URL:', error);
-      alert('Failed to parse API spec from URL. Please check the URL and spec format.');
-    } finally {
-      setUploading(false);
-    }
+    if (!specUrl.trim()) return alert('Please enter a URL.');
+    // For now, we pass the URL itself as content, as swagger-parser can handle it.
+    await handleParse(specUrl, 'Spec from URL');
+    setSpecUrl('');
   };
 
   const handleSaveApiKey = async () => {
     if (!currentSpec) return;
     try {
-      await apiService.setApiKey(currentSpec.id, apiKey);
-      const updatedSpec = { ...currentSpec, apiKey };
-      onContextUpdate({
-        specs: {
-          ...contextState.specs,
-          [currentSpec.id]: updatedSpec,
-        },
-      });
+      await setApiKeyAction({ id: currentSpec._id as Id<"specs">, apiKey });
       alert('API Key saved!');
     } catch (error) {
       console.error('Failed to save API key:', error);
@@ -235,7 +170,7 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
         </div>
       </div>
 
-      {currentSpec && (
+      {currentSpec && currentSpec.parsed && (
         <div className="spec-details">
           <h3>Current Spec: {currentSpec.name}</h3>
           
@@ -369,6 +304,14 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
               <strong>Base URL:</strong> {currentSpec.parsed.baseUrl}
             </div>
           )}
+        </div>
+      )}
+
+      {currentSpec && !currentSpec.parsed && (
+        <div className="empty-state">
+          <div className="empty-icon">⏳</div>
+          <p>Parsing your spec...</p>
+          <p className="empty-hint">This should only take a moment.</p>
         </div>
       )}
 
