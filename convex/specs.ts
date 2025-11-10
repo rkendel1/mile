@@ -17,7 +17,7 @@ export const parseSpec = action({
       name: args.name,
       type: args.type,
       version: args.version,
-      content: args.content,
+      content: JSON.stringify(args.content),
       userId: args.sessionId,
     });
 
@@ -36,7 +36,7 @@ export const createPlaceholder = internalMutation({
     name: v.string(),
     version: v.string(),
     type: v.string(),
-    content: v.any(),
+    content: v.string(),
     userId: v.string(),
   },
   handler: async (ctx, args) => {
@@ -52,7 +52,7 @@ export const createPlaceholder = internalMutation({
 
 // Internal mutation to update the spec with the parsed data
 export const updateWithParsedData = internalMutation({
-  args: { specId: v.id("specs"), parsed: v.any() },
+  args: { specId: v.id("specs"), parsed: v.string() },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.specId, { parsed: args.parsed });
   },
@@ -63,7 +63,34 @@ export const get = query({
   args: { id: v.optional(v.id("specs")) },
   handler: async (ctx, args) => {
     if (!args.id) return null;
-    return await ctx.db.get(args.id);
+    const spec = await ctx.db.get(args.id);
+
+    if (!spec) return null;
+
+    // The document from Convex is read-only, so we create a new object
+    // to hold the modified data.
+    const result: any = { ...spec };
+
+    // The raw spec content is also stored as a string, but the client
+    // might expect an object if it was originally JSON.
+    try {
+      result.content = JSON.parse(spec.content);
+    } catch (e) {
+      // If it's not valid JSON (e.g., YAML string), leave it as is.
+      result.content = spec.content;
+    }
+
+    if (spec.parsed) {
+      try {
+        result.parsed = JSON.parse(spec.parsed);
+      } catch (e) {
+        console.error("Failed to parse 'parsed' field from spec:", spec._id, e);
+        // If parsing fails, remove the malformed field.
+        delete result.parsed;
+      }
+    }
+
+    return result;
   },
 });
 

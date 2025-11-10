@@ -3,13 +3,13 @@
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import SwaggerParser from "swagger-parser";
+import * as SwaggerParser from "swagger-parser";
 import { ParsedSpec, Endpoint, Model, AuthMethod, Parameter, RequestBody, Response, Schema } from "../types";
 
 // Helper class for parsing, moved to its own Node.js environment file
 class SpecParser {
   async parse(content: any): Promise<ParsedSpec> {
-    const api: any = await SwaggerParser.validate(content, {
+    const api: any = await (SwaggerParser as any).validate(content, {
       dereference: { circular: "ignore" },
     });
     return {
@@ -39,7 +39,7 @@ export const performParsing = internalAction({
       const parsed = await parser.parse(args.content);
       await ctx.runMutation(internal.specs.updateWithParsedData, {
         specId: args.specId,
-        parsed,
+        parsed: JSON.stringify(parsed),
       });
     } catch (error: any) {
       console.error(`Failed to parse spec ${args.specId}:`, error);
