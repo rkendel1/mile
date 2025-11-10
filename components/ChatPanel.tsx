@@ -21,7 +21,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, context, contextState,
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const messages = useQuery(api.chat.getMessagesForSession, { sessionId }) || [];
-  const sendMessage = useAction(api.chat.sendMessage);
+  const sendMessage = useAction(api.openai.sendMessage);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -70,7 +70,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ sessionId, context, contextState,
       </div>
       
       <div className="chat-messages">
-        {messages.map((message) => (
+        {messages.map((message: ChatMessage) => (
           <div key={message.id} className={`message message-${message.role}`}>
             <div className="message-avatar">
               {message.role === 'user' ? '👤' : message.role === 'assistant' ? '🤖' : 'ℹ️'}
