@@ -76,8 +76,14 @@ chatRouter.get('/history/:sessionId', (req: Request, res: Response) => {
 
 // Clear chat history
 chatRouter.delete('/history/:sessionId', (req: Request, res: Response) => {
-  if (contextStates[req.params.sessionId]) {
-    contextStates[req.params.sessionId].chatHistory = [];
+  const sessionId = req.params.sessionId;
+  
+  // Validate sessionId to prevent prototype pollution
+  if (sessionId && typeof sessionId === 'string' && contextStates[sessionId]) {
+    contextStates[sessionId] = {
+      ...contextStates[sessionId],
+      chatHistory: [],
+    };
   }
   
   res.json({ success: true });

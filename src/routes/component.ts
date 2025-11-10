@@ -73,9 +73,16 @@ componentRouter.put('/:id', (req: Request, res: Response) => {
 
   const { code, bindings, functions } = req.body;
 
-  if (code) component.code = code;
-  if (bindings) component.bindings = bindings;
-  if (functions) component.functions = functions;
+  // Safely update properties to prevent prototype pollution
+  if (code !== undefined && typeof code === 'string') {
+    component.code = code;
+  }
+  if (bindings !== undefined && Array.isArray(bindings)) {
+    component.bindings = bindings;
+  }
+  if (functions !== undefined && Array.isArray(functions)) {
+    component.functions = functions;
+  }
   component.updatedAt = new Date().toISOString();
 
   res.json({ success: true, component });
