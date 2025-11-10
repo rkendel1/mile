@@ -1,0 +1,57 @@
+.schema-properties {
+  margin-top: 0.5rem;
+  margin-left: 1rem;
+  border-left: 2px solid var(--border-color);
+  padding-left: 1rem;
+}
+
+.schema-property {
+  margin-bottom: 1rem;
+}
+
+.property-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.property-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.property-type {
+  font-size: 0.8rem;
+  color: var(--secondary-color);
+  background: rgba(139, 92, 246, 0.1);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.property-required {
+  font-size: 0.75rem;
+  color: var(--warning-color);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.property-description {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-left: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.array-items {
+  margin-top: 0.5rem;
+  margin-left: 1rem;
+  padding-left: 1rem;
+  border-left: 2px dotted var(--border-color);
+}
+
+.schema-array {
+  margin-top: 0.5rem;
+}
