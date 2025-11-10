@@ -17,21 +17,60 @@ export interface ParsedSpec {
   baseUrl?: string;
 }
 
+export interface Schema {
+  type: string;
+  properties?: { [key: string]: Schema };
+  items?: Schema;
+  required?: string[];
+  enum?: any[];
+  format?: string;
+  description?: string;
+}
+
+export interface Parameter {
+  name: string;
+  in: 'query' | 'path' | 'header' | 'cookie';
+  description?: string;
+  required: boolean;
+  schema: Schema;
+}
+
+export interface RequestBody {
+  description?: string;
+  required: boolean;
+  content: {
+    [mediaType: string]: {
+      schema: Schema;
+    };
+  };
+}
+
+export interface Response {
+  statusCode: string;
+  description: string;
+  content?: {
+    [mediaType: string]: {
+      schema: Schema;
+    };
+  };
+}
+
 export interface Endpoint {
   id: string;
   path: string;
   method: string;
   summary?: string;
   description?: string;
-  parameters: any[];
-  requestBody?: any;
-  responses: any[];
+  parameters: Parameter[];
+  requestBody?: RequestBody;
+  responses: Response[];
   tags?: string[];
 }
 
 export interface Model {
   name: string;
-  properties: { [key: string]: any };
+  description?: string;
+  properties: { [key: string]: Schema };
   required?: string[];
 }
 

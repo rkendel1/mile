@@ -1,5 +1,5 @@
 const SwaggerParser = require('swagger-parser');
-import { APISpec, ParsedSpec, Endpoint, Model, AuthMethod, Parameter, RequestBody, Response } from '../types';
+import { APISpec, ParsedSpec, Endpoint, Model, AuthMethod, Parameter, RequestBody, Response, Schema } from '../types';
 
 export class SpecParserService {
   async parseSpec(content: any, type: 'openapi' | 'swagger' | 'graphql'): Promise<ParsedSpec> {
@@ -17,7 +17,8 @@ export class SpecParserService {
   private async parseOpenAPI(content: any): Promise<ParsedSpec> {
     try {
       const parser = new SwaggerParser();
-      const api: any = await parser.validate(content);
+      // The `bundle` method resolves all external and internal $refs
+      const api: any = await parser.bundle(content);
       
       const endpoints: Endpoint[] = [];
       const models: Model[] = [];
@@ -26,9 +27,8 @@ export class SpecParserService {
       // Parse endpoints
       if (api.paths) {
         Object.entries(api.paths).forEach(([path, pathItem]: [string, any]) => {
-          ['get', 'post', 'put', 'patch', 'delete'].forEach((method) => {
-            if (pathItem[method]) {
-              const operation = pathItem[method];
+          Object.entries(pathItem).forEach(([method, operation]: [string, any]) => {
+            if (['get', 'post', 'put', 'patch', 'delete'].includes(method)) {
               endpoints.push({
                 id: `${method}-${path}`.replace(/[^a-zA-Z0-9]/g, '-'),
                 path,
@@ -45,15 +45,9 @@ export class SpecParserService {
         });
       }
 
-      // Parse models/schemas
+      // Parse models/schemas from components
       if (api.components?.schemas) {
-        Object.entries(api.components.schemas).forEach(([name, schema]: [string, any]) => {
-          models.push({
-            name,
-            properties: schema.properties || {},
-            required: schema.required,
-          });
-        });
+        models.push(...this.parseModels(api.components.schemas));
       }
 
       // Parse auth methods
@@ -75,38 +69,111 @@ export class SpecParserService {
         authMethods,
         baseUrl,
       };
-    } catch (error) {
-      throw new Error(`Failed to parse OpenAPI spec: ${error}`);
+    } catch (error: any) {
+      throw new Error(`Failed to parse OpenAPI spec: ${error.message}`);
     }
   }
 
+  private parseSchema(schemaObj: any): Schema {
+    if (!schemaObj) return { type: 'any' };
+
+    const { type, properties, items, required, description, format, enum: enumValues } = schemaObj;
+
+    const parsedSchema: Schema = {
+      type: type || 'object', // Default to object if type is missing
+      description,
+      format,
+      enum: enumValues,
+    };
+
+    if (type === 'object' && properties) {
+      parsedSchema.properties = {};
+      Object.entries(properties).forEach(([propName, propSchema]: [string, any]) => {
+        parsedSchema.properties![propName] = this.parseSchema(propSchema);
+      });
+      parsedSchema.required = required;
+    }
+
+    if (type === 'array' && items) {
+      parsedSchema.items = this.parseSchema(items);
+    }
+
+    return parsedSchema;
+  }
+
   private parseParameters(operationParams?: any[], pathParams?: any[]): Parameter[] {
-    const allParams = [...(pathParams || []), ...(operationParams || [])];
-    return allParams.map((param) => ({
+    const combinedParams = [...(pathParams || []), ...(operationParams || [])];
+    const uniqueParams = combinedParams.filter(
+      (param, index, self) => index === self.findIndex(p => p.name === param.name && p.in === param.in)
+    );
+    if (!uniqueParams) return [];
+    return uniqueParams.map((param) => ({
       name: param.name,
       in: param.in,
       description: param.description,
       required: param.required || false,
-      schema: param.schema || {},
+      schema: this.parseSchema(param.schema),
     }));
   }
 
   private parseRequestBody(requestBody?: any): RequestBody | undefined {
     if (!requestBody) return undefined;
     
+    const content: RequestBody['content'] = {};
+    if (requestBody.content) {
+      Object.entries(requestBody.content).forEach(([mediaType, mediaTypeObj]: [string, any]) => {
+        if (mediaTypeObj.schema) {
+          content[mediaType] = {
+            schema: this.parseSchema(mediaTypeObj.schema),
+          };
+        }
+      });
+    }
+
     return {
       description: requestBody.description,
       required: requestBody.required || false,
-      content: requestBody.content || {},
+      content,
     };
   }
 
-  private parseResponses(responses: any): Response[] {
-    return Object.entries(responses || {}).map(([statusCode, response]: [string, any]) => ({
-      statusCode,
-      description: response.description || '',
-      content: response.content,
-    }));
+  private parseResponses(responses?: any): Response[] {
+    if (!responses) return [];
+    return Object.entries(responses).map(([statusCode, response]: [string, any]) => {
+      const content: Response['content'] = {};
+      if (response.content) {
+        Object.entries(response.content).forEach(([mediaType, mediaTypeObj]: [string, any]) => {
+          if (mediaTypeObj.schema) {
+            content[mediaType] = {
+              schema: this.parseSchema(mediaTypeObj.schema),
+            };
+          }
+        });
+      }
+      return {
+        statusCode,
+        description: response.description || '',
+        content,
+      };
+    });
+  }
+
+  private parseModels(schemas?: any): Model[] {
+    if (!schemas) return [];
+    return Object.entries(schemas).map(([name, schema]: [string, any]) => {
+      const properties: { [key: string]: Schema } = {};
+      if (schema.properties) {
+        Object.entries(schema.properties).forEach(([propName, propSchema]: [string, any]) => {
+          properties[propName] = this.parseSchema(propSchema);
+        });
+      }
+      return {
+        name,
+        description: schema.description,
+        properties,
+        required: schema.required,
+      };
+    });
   }
 
   private parseGraphQL(content: any): ParsedSpec {

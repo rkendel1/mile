@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ContextState } from '../../types';
+import { ContextState, Schema } from '../../types';
 import { apiService } from '../../services/api';
+import SchemaViewer from '../SchemaViewer';
 import '../../styles/Tabs.css';
 
 interface SpecTabProps {
@@ -14,6 +15,7 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
   const [pastedSpec, setPastedSpec] = useState('');
   const [specUrl, setSpecUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
 
   const currentSpec = contextState.currentSpec 
     ? contextState.specs[contextState.currentSpec] 
@@ -24,6 +26,10 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
       setApiKey(currentSpec.apiKey || '');
     }
   }, [currentSpec]);
+
+  const toggleExpand = (id: string) => {
+    setExpandedItems(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -151,6 +157,14 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
     }
   };
 
+  const renderSchemaForContent = (content: { [mediaType: string]: { schema: Schema } }) => {
+    const jsonContent = content['application/json'];
+    if (jsonContent?.schema) {
+      return <SchemaViewer schema={jsonContent.schema} requiredFields={jsonContent.schema.required} />;
+    }
+    return <p className="no-info">No JSON schema available.</p>;
+  };
+
   return (
     <div className="tab-container spec-tab">
       <h2>📋 API Specification</h2>
@@ -274,20 +288,77 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
             </div>
           )}
 
-          <div className="endpoints-list">
-            <h4>Endpoints</h4>
-            <div className="scrollable-list">
-              {currentSpec.parsed.endpoints.map((endpoint) => (
-                <div key={endpoint.id} className="endpoint-item">
-                  <span className={`method-badge method-${endpoint.method.toLowerCase()}`}>
-                    {endpoint.method}
-                  </span>
-                  <span className="endpoint-path">{endpoint.path}</span>
-                  {endpoint.summary && (
-                    <span className="endpoint-summary">{endpoint.summary}</span>
-                  )}
-                </div>
-              ))}
+          <div className="detailed-lists">
+            <div className="endpoints-list">
+              <h4>Endpoints</h4>
+              <div className="scrollable-list">
+                {currentSpec.parsed.endpoints.map((endpoint) => (
+                  <div key={endpoint.id} className="endpoint-item-container">
+                    <div className="endpoint-item" onClick={() => toggleExpand(endpoint.id)}>
+                      <span className={`method-badge method-${endpoint.method.toLowerCase()}`}>{endpoint.method}</span>
+                      <span className="endpoint-path">{endpoint.path}</span>
+                      <span className="expand-icon">{expandedItems[endpoint.id] ? '▼' : '▶'}</span>
+                    </div>
+                    {expandedItems[endpoint.id] && (
+                      <div className="endpoint-details">
+                        {endpoint.summary && <p className="endpoint-summary">{endpoint.summary}</p>}
+                        {endpoint.parameters.length > 0 && (
+                          <div className="detail-section">
+                            <h5>Parameters</h5>
+                            {endpoint.parameters.map(p => (
+                              <div key={`${p.in}-${p.name}`} className="parameter-item">
+                                <span className="param-name">{p.name}</span>
+                                <span className="param-in">{p.in}</span>
+                                <span className="param-type">{p.schema.format || p.schema.type}</span>
+                                {p.required && <span className="param-required">required</span>}
+                                {p.description && <p className="param-desc">{p.description}</p>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {endpoint.requestBody && (
+                          <div className="detail-section">
+                            <h5>Request Body {endpoint.requestBody.required && <span className="param-required">(required)</span>}</h5>
+                            {renderSchemaForContent(endpoint.requestBody.content)}
+                          </div>
+                        )}
+                        {endpoint.responses.length > 0 && (
+                          <div className="detail-section">
+                            <h5>Responses</h5>
+                            {endpoint.responses.map(r => (
+                              <div key={r.statusCode} className="response-item">
+                                <span className={`status-code-badge status-${r.statusCode.charAt(0)}xx`}>{r.statusCode}</span>
+                                <p>{r.description}</p>
+                                {r.content && renderSchemaForContent(r.content)}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="models-list">
+              <h4>Models</h4>
+              <div className="scrollable-list">
+                {currentSpec.parsed.models.map((model) => (
+                  <div key={model.name} className="model-item-container">
+                    <div className="model-item" onClick={() => toggleExpand(model.name)}>
+                      <span className="model-name">{model.name}</span>
+                      <span className="expand-icon">{expandedItems[model.name] ? '▼' : '▶'}</span>
+                    </div>
+                    {expandedItems[model.name] && (
+                      <div className="model-details">
+                        {model.description && <p className="model-description">{model.description}</p>}
+                        <SchemaViewer schema={{ type: 'object', properties: model.properties, required: model.required }} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 

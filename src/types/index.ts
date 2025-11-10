@@ -69,6 +69,7 @@ export interface Schema {
 
 export interface Model {
   name: string;
+  description?: string;
   properties: { [key: string]: Schema };
   required?: string[];
 }
