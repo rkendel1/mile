@@ -10,17 +10,18 @@ const components: { [id: string]: Component } = {};
 // Generate component
 componentRouter.post('/generate', async (req: Request, res: Response) => {
   try {
-    const { name, uiComponents, bindings, functions, framework } = req.body;
+    const { name, uiComponents, bindings, functions, framework, embedContext } = req.body;
 
     if (!name || !uiComponents) {
       return res.status(400).json({ error: 'Missing required fields: name, uiComponents' });
     }
 
-    const code = componentGeneratorService.generateReactComponent(
+    const code = await componentGeneratorService.generateReactComponent(
       name,
       uiComponents,
       bindings || [],
-      functions || []
+      functions || [],
+      embedContext
     );
 
     const component: Component = {
@@ -30,6 +31,7 @@ componentRouter.post('/generate', async (req: Request, res: Response) => {
       framework: framework || 'react',
       bindings: bindings || [],
       functions: functions || [],
+      contexts: embedContext,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -45,6 +47,7 @@ componentRouter.post('/generate', async (req: Request, res: Response) => {
         framework: component.framework,
         code: component.code,
         preview: component.preview,
+        contexts: component.contexts,
       },
     });
   } catch (error: any) {

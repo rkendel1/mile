@@ -7,9 +7,19 @@ Mile is a conversational web platform that bridges the gap between API specs and
 ## 🌟 Features
 
 ### Conversational AI-Driven Interface
+- **OpenAI Integration**: Powered by GPT-4 for intelligent, context-aware conversations
 - **Natural Language Planning**: Describe what you want to build in plain English
-- **Context-Aware Assistance**: AI understands your current workflow stage
+- **Context-Aware Assistance**: AI understands your current workflow stage and adapts responses
 - **Interactive Guidance**: Get help at every step of the journey
+
+### Context-Aware Components (NEW!)
+- **8 Dynamic Context Types**: Components adapt to tenant, user, environment, and more
+- **Multi-Tenancy Support**: White-label components with per-tenant branding
+- **Role-Based Rendering**: Show/hide features based on user permissions
+- **Device Adaptation**: Automatically optimize for mobile, tablet, or desktop
+- **A/B Testing Ready**: Built-in support for feature flags and experiments
+
+See [CONTEXT_GUIDE.md](./CONTEXT_GUIDE.md) for detailed documentation.
 
 ### Two-Pane Workspace
 - **Left Panel**: Persistent chat interface with full conversation context
@@ -71,6 +81,14 @@ mile/
    npm install
    cd ..
    ```
+
+4. **Configure OpenAI (Optional but Recommended)**
+   ```bash
+   cp .env.example .env
+   # Edit .env and add your OPENAI_API_KEY for AI-powered conversations
+   ```
+   
+   Without OpenAI, the system uses rule-based fallback responses.
 
 ### Running the Application
 

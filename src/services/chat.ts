@@ -1,4 +1,6 @@
 import { ChatMessage, ChatContext, ContextState } from '../types';
+import { EmbedContext } from '../types/contexts';
+import { openAIService } from './openai';
 
 export class ChatService {
   private contextState: ContextState = {
@@ -12,9 +14,30 @@ export class ChatService {
   async processMessage(
     message: string,
     context: ChatContext,
-    state: ContextState
+    state: ContextState,
+    embedContext?: EmbedContext
   ): Promise<{ response: string; context: ChatContext; actions?: any[] }> {
     this.contextState = state;
+    
+    // Try OpenAI first, fallback to rule-based system
+    try {
+      const aiResponse = await openAIService.generateResponse(message, context, state, embedContext);
+      return {
+        response: aiResponse.response,
+        context,
+        actions: aiResponse.actions,
+      };
+    } catch (error) {
+      console.error('Error in AI processing, using fallback:', error);
+      return this.processMessageFallback(message, context, state);
+    }
+  }
+
+  private processMessageFallback(
+    message: string,
+    context: ChatContext,
+    state: ContextState
+  ): { response: string; context: ChatContext; actions?: any[] } {
     
     const lowerMessage = message.toLowerCase();
     const activeTab = context.activeTab;

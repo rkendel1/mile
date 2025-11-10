@@ -1,16 +1,18 @@
 import { Router, Request, Response } from 'express';
 import { chatService } from '../services/chat';
 import { ChatMessage, ChatContext, ContextState } from '../types';
+import { EmbedContext } from '../types/contexts';
 
 export const chatRouter = Router();
 
 // In-memory storage (would use a database in production)
 const contextStates: { [sessionId: string]: ContextState } = {};
+const embedContexts: { [sessionId: string]: EmbedContext } = {};
 
 // Process chat message
 chatRouter.post('/message', async (req: Request, res: Response) => {
   try {
-    const { message, context, sessionId } = req.body;
+    const { message, context, sessionId, embedContext } = req.body;
 
     if (!message || !context || !sessionId) {
       return res.status(400).json({ error: 'Missing required fields: message, context, sessionId' });
@@ -27,7 +29,13 @@ chatRouter.post('/message', async (req: Request, res: Response) => {
       };
     }
 
+    // Store embed context if provided
+    if (embedContext) {
+      embedContexts[sessionId] = embedContext;
+    }
+
     const state = contextStates[sessionId];
+    const storedEmbedContext = embedContexts[sessionId];
 
     // Add user message to history
     const userMessage: ChatMessage = {
@@ -39,8 +47,8 @@ chatRouter.post('/message', async (req: Request, res: Response) => {
     };
     state.chatHistory.push(userMessage);
 
-    // Process message
-    const result = await chatService.processMessage(message, context, state);
+    // Process message with OpenAI integration
+    const result = await chatService.processMessage(message, context, state, storedEmbedContext);
 
     // Add assistant response to history
     const assistantMessage: ChatMessage = {
@@ -124,4 +132,46 @@ chatRouter.post('/context/:sessionId', (req: Request, res: Response) => {
   };
 
   res.json({ success: true, state: contextStates[sessionId] });
+});
+
+// Set or update embed context for a session
+chatRouter.post('/embed-context/:sessionId', (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  const embedContext: EmbedContext = req.body;
+
+  // Validate sessionId
+  if (!sessionId || typeof sessionId !== 'string') {
+    return res.status(400).json({ error: 'Invalid sessionId' });
+  }
+
+  embedContexts[sessionId] = embedContext;
+
+  res.json({ 
+    success: true, 
+    message: 'Embed context updated successfully',
+    embedContext 
+  });
+});
+
+// Get embed context for a session
+chatRouter.get('/embed-context/:sessionId', (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  
+  const embedContext = embedContexts[sessionId] || {};
+  
+  res.json({ 
+    success: true, 
+    embedContext 
+  });
+});
+
+// Delete embed context for a session
+chatRouter.delete('/embed-context/:sessionId', (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  
+  if (embedContexts[sessionId]) {
+    delete embedContexts[sessionId];
+  }
+  
+  res.json({ success: true, message: 'Embed context cleared' });
 });

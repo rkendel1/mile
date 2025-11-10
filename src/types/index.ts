@@ -164,6 +164,14 @@ export interface Component {
   functions: FunctionBinding[];
   createdAt: string;
   updatedAt: string;
+  contexts?: import('./contexts').EmbedContext;
+  contextBindings?: {
+    [propertyPath: string]: {
+      contextType: string;
+      contextPath: string;
+      defaultValue?: any;
+    };
+  };
 }
 
 export interface ContextState {

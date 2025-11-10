@@ -1,22 +1,72 @@
 import { Component, UIComponent, DataBinding, FunctionBinding } from '../types';
+import { EmbedContext } from '../types/contexts';
+import { openAIService } from './openai';
 
 export class ComponentGeneratorService {
-  generateReactComponent(
+  async generateReactComponent(
     name: string,
     uiComponents: UIComponent[],
     bindings: DataBinding[],
-    functions: FunctionBinding[]
+    functions: FunctionBinding[],
+    embedContext?: EmbedContext
+  ): Promise<string> {
+    // Try OpenAI generation if context is provided
+    if (embedContext) {
+      try {
+        const goal = `Generate a UI component with ${uiComponents.length} sub-components`;
+        const endpoints = functions.map(f => f.endpoint);
+        const aiCode = await openAIService.generateContextAwareComponent(name, goal, endpoints, embedContext);
+        if (aiCode && aiCode.length > 100) {
+          return aiCode;
+        }
+      } catch (error) {
+        console.log('Falling back to template generation');
+      }
+    }
+
+    // Fallback to template generation
+    return this.generateReactComponentTemplate(name, uiComponents, bindings, functions, embedContext);
+  }
+
+  private generateReactComponentTemplate(
+    name: string,
+    uiComponents: UIComponent[],
+    bindings: DataBinding[],
+    functions: FunctionBinding[],
+    embedContext?: EmbedContext
   ): string {
     const componentName = this.toPascalCase(name);
     
-    let code = `import React, { useState, useEffect } from 'react';\n\n`;
+    let code = `import React, { useState, useEffect } from 'react';\n`;
+    code += `import { EmbedContext } from './types/contexts';\n\n`;
     
-    // Generate component
-    code += `export const ${componentName} = ({ apiClient }) => {\n`;
+    // Generate component with context prop
+    code += `interface ${componentName}Props {\n`;
+    code += `  apiClient: any;\n`;
+    code += `  context: EmbedContext;\n`;
+    code += `}\n\n`;
+    code += `export const ${componentName}: React.FC<${componentName}Props> = ({ apiClient, context }) => {\n`;
     code += `  // State management\n`;
     code += `  const [data, setData] = useState({});\n`;
     code += `  const [loading, setLoading] = useState(false);\n`;
     code += `  const [error, setError] = useState(null);\n\n`;
+
+    // Add context-aware variables
+    if (embedContext) {
+      code += `  // Extract context values\n`;
+      if (embedContext.tenant) {
+        code += `  const brandColor = context.tenant?.brand?.primaryColor || '#3b82f6';\n`;
+        code += `  const theme = context.tenant?.brand?.theme || 'light';\n`;
+      }
+      if (embedContext.user) {
+        code += `  const userRole = context.user?.role || 'guest';\n`;
+        code += `  const userName = context.user?.name || 'User';\n`;
+      }
+      if (embedContext.permissions) {
+        code += `  const hasPermission = (action: string) => context.permissions?.allowedActions?.includes(action) || false;\n`;
+      }
+      code += `\n`;
+    }
 
     // Generate API fetch functions
     code += `  // API functions\n`;
@@ -48,11 +98,38 @@ export class ComponentGeneratorService {
     }
     code += `  }, []);\n\n`;
 
-    // Generate JSX
+    // Conditional rendering based on context
+    if (embedContext?.permissions) {
+      code += `  // Check permissions before rendering\n`;
+      code += `  if (!hasPermission('view')) {\n`;
+      code += `    return <div>You don't have permission to view this component.</div>;\n`;
+      code += `  }\n\n`;
+    }
+
+    // Generate JSX with context-aware styling
     code += `  if (loading) return <div>Loading...</div>;\n`;
     code += `  if (error) return <div>Error: {error}</div>;\n\n`;
     code += `  return (\n`;
-    code += this.generateJSX(uiComponents, 2);
+    code += `    <div style={{\n`;
+    if (embedContext?.tenant) {
+      code += `      backgroundColor: theme === 'dark' ? '#1e293b' : '#ffffff',\n`;
+      code += `      color: theme === 'dark' ? '#e2e8f0' : '#1e293b',\n`;
+      code += `      padding: '20px',\n`;
+      code += `      borderRadius: '8px'\n`;
+    } else {
+      code += `      padding: '20px'\n`;
+    }
+    code += `    }}>\n`;
+    
+    if (embedContext?.user) {
+      code += `      <div style={{ marginBottom: '20px' }}>\n`;
+      code += `        <h3 style={{ color: brandColor }}>Welcome, {userName}!</h3>\n`;
+      code += `        <span style={{ fontSize: '0.9em', opacity: 0.7 }}>Role: {userRole}</span>\n`;
+      code += `      </div>\n`;
+    }
+    
+    code += this.generateJSX(uiComponents, 3, embedContext);
+    code += `    </div>\n`;
     code += `  );\n`;
     code += `};\n\n`;
     code += `export default ${componentName};\n`;
@@ -60,7 +137,7 @@ export class ComponentGeneratorService {
     return code;
   }
 
-  private generateJSX(components: UIComponent[], indentLevel: number): string {
+  private generateJSX(components: UIComponent[], indentLevel: number, embedContext?: EmbedContext): string {
     if (components.length === 0) {
       return `${' '.repeat(indentLevel * 2)}<div>No components</div>\n`;
     }
@@ -82,7 +159,7 @@ export class ComponentGeneratorService {
 
       if (component.children && component.children.length > 0) {
         jsx += `>\n`;
-        jsx += this.generateJSX(component.children, indentLevel + 1);
+        jsx += this.generateJSX(component.children, indentLevel + 1, embedContext);
         jsx += `${indent}</${component.type}>\n`;
       } else {
         jsx += ` />\n`;
