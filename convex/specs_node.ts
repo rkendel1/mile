@@ -9,7 +9,7 @@ import { ParsedSpec, Endpoint, Model, AuthMethod, Parameter, RequestBody, Respon
 // Helper class for parsing, moved to its own Node.js environment file
 class SpecParser {
   async parse(content: any): Promise<ParsedSpec> {
-    const api = await SwaggerParser.validate(content, {
+    const api: any = await SwaggerParser.validate(content, {
       dereference: { circular: "ignore" },
     });
     return {
