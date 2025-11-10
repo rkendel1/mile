@@ -3,7 +3,7 @@
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import * as SwaggerParser from "swagger-parser";
+import SwaggerParser from "swagger-parser";
 import { ParsedSpec, Endpoint, Model, AuthMethod, Parameter, RequestBody, Response, Schema } from "../types";
 
 // Helper class for parsing, moved to its own Node.js environment file
