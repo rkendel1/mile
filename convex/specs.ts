@@ -50,45 +50,68 @@ export const createPlaceholder = internalMutation({
   },
 });
 
-// Internal mutation to update the spec with the parsed data
-export const updateWithParsedData = internalMutation({
-  args: { specId: v.id("specs"), parsed: v.string() },
+// Internal mutations to store the parsed data chunks
+export const updateSpecDetails = internalMutation({
+  args: {
+    specId: v.id("specs"),
+    baseUrl: v.optional(v.string()),
+    authMethods: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.specId, { parsed: args.parsed });
+    const { specId, ...rest } = args;
+    await ctx.db.patch(specId, rest);
   },
 });
 
-// Public query to get a spec by its ID
+export const addEndpoint = internalMutation({
+  args: { specId: v.id("specs"), endpointData: v.string() },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("spec_endpoints", args);
+  },
+});
+
+export const addModel = internalMutation({
+  args: { specId: v.id("specs"), modelData: v.string() },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("spec_models", args);
+  },
+});
+
+// Public query to get a spec by its ID and reassemble it
 export const get = query({
   args: { id: v.optional(v.id("specs")) },
   handler: async (ctx, args) => {
     if (!args.id) return null;
     const spec = await ctx.db.get(args.id);
-
     if (!spec) return null;
 
-    // The document from Convex is read-only, so we create a new object
-    // to hold the modified data.
+    // Fetch related endpoints and models
+    const endpointDocs = await ctx.db
+      .query("spec_endpoints")
+      .withIndex("by_specId", (q) => q.eq("specId", args.id!))
+      .collect();
+    
+    const modelDocs = await ctx.db
+      .query("spec_models")
+      .withIndex("by_specId", (q) => q.eq("specId", args.id!))
+      .collect();
+
+    // Assemble the final object for the client
     const result: any = { ...spec };
 
-    // The raw spec content is also stored as a string, but the client
-    // might expect an object if it was originally JSON.
     try {
       result.content = JSON.parse(spec.content);
     } catch (e) {
-      // If it's not valid JSON (e.g., YAML string), leave it as is.
       result.content = spec.content;
     }
 
-    if (spec.parsed) {
-      try {
-        result.parsed = JSON.parse(spec.parsed);
-      } catch (e) {
-        console.error("Failed to parse 'parsed' field from spec:", spec._id, e);
-        // If parsing fails, remove the malformed field.
-        delete result.parsed;
-      }
-    }
+    // Reconstruct the 'parsed' field
+    result.parsed = {
+      baseUrl: spec.baseUrl || "",
+      authMethods: spec.authMethods ? JSON.parse(spec.authMethods) : [],
+      endpoints: endpointDocs.map(doc => JSON.parse(doc.endpointData)),
+      models: modelDocs.map(doc => JSON.parse(doc.modelData)),
+    };
 
     return result;
   },

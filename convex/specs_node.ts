@@ -37,10 +37,27 @@ export const performParsing = internalAction({
     const parser = new SpecParser();
     try {
       const parsed = await parser.parse(args.content);
-      await ctx.runMutation(internal.specs.updateWithParsedData, {
+      
+      // Store baseUrl and authMethods on the main spec doc
+      await ctx.runMutation(internal.specs.updateSpecDetails, {
         specId: args.specId,
-        parsed: JSON.stringify(parsed),
+        baseUrl: parsed.baseUrl,
+        authMethods: JSON.stringify(parsed.authMethods),
       });
+
+      // Store each endpoint and model in its own document
+      for (const endpoint of parsed.endpoints) {
+        await ctx.runMutation(internal.specs.addEndpoint, {
+          specId: args.specId,
+          endpointData: JSON.stringify(endpoint),
+        });
+      }
+      for (const model of parsed.models) {
+        await ctx.runMutation(internal.specs.addModel, {
+          specId: args.specId,
+          modelData: JSON.stringify(model),
+        });
+      }
     } catch (error: any) {
       console.error(`Failed to parse spec ${args.specId}:`, error);
       // Optionally, update the spec with an error state

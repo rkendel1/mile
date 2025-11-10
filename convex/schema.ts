@@ -11,9 +11,20 @@ export default defineSchema({
       v.literal("graphql")
     ),
     content: v.string(), // Store raw spec as a string
-    parsed: v.optional(v.string()), // Store parsed spec as a JSON string
+    authMethods: v.optional(v.string()), // Store as JSON string
+    baseUrl: v.optional(v.string()),
     suggestedFlows: v.optional(v.array(v.string())),
     apiKey: v.optional(v.string()),
     userId: v.string(), // To associate specs with a user session
   }).index("by_userId", ["userId"]),
+
+  spec_endpoints: defineTable({
+    specId: v.id("specs"),
+    endpointData: v.string(), // JSON string of a single Endpoint object
+  }).index("by_specId", ["specId"]),
+
+  spec_models: defineTable({
+    specId: v.id("specs"),
+    modelData: v.string(), // JSON string of a single Model object
+  }).index("by_specId", ["specId"]),
 });
