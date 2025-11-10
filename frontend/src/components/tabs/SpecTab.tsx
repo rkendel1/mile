@@ -216,6 +216,19 @@ const SpecTab: React.FC<SpecTabProps> = ({ contextState, onContextUpdate }) => {
             </div>
           </div>
 
+          {currentSpec.suggestedFlows && currentSpec.suggestedFlows.length > 0 && (
+            <div className="suggested-flows-section">
+              <h4>🤖 AI-Suggested Flows</h4>
+              <div className="flows-list">
+                {currentSpec.suggestedFlows.map((flow, index) => (
+                  <button key={index} className="flow-suggestion-btn">
+                    {flow}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="endpoints-list">
             <h4>Endpoints</h4>
             <div className="scrollable-list">

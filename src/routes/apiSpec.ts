@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { specParserService } from '../services/specParser';
 import { APISpec } from '../types';
+import { openAIService } from '../services/openai';
 
 export const apiSpecRouter = Router();
 
@@ -17,6 +18,7 @@ apiSpecRouter.post('/parse', async (req: Request, res: Response) => {
     }
 
     const parsed = await specParserService.parseSpec(content, type);
+    const suggestedFlows = await openAIService.analyzeSpecAndSuggestFlows(parsed);
     
     const spec: APISpec = {
       id: `spec-${Date.now()}`,
@@ -25,6 +27,7 @@ apiSpecRouter.post('/parse', async (req: Request, res: Response) => {
       type,
       content,
       parsed,
+      suggestedFlows,
       createdAt: new Date().toISOString(),
     };
 
@@ -70,6 +73,7 @@ apiSpecRouter.post('/parse-url', async (req: Request, res: Response) => {
     }
 
     const parsed = await specParserService.parseSpec(specContent, type);
+    const suggestedFlows = await openAIService.analyzeSpecAndSuggestFlows(parsed);
     
     const spec: APISpec = {
       id: `spec-${Date.now()}`,
@@ -78,6 +82,7 @@ apiSpecRouter.post('/parse-url', async (req: Request, res: Response) => {
       type,
       content: specContent,
       parsed,
+      suggestedFlows,
       createdAt: new Date().toISOString(),
     };
 

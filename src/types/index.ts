@@ -5,6 +5,7 @@ export interface APISpec {
   type: 'openapi' | 'swagger' | 'graphql';
   content: any;
   parsed: ParsedSpec;
+  suggestedFlows?: string[];
   createdAt: string;
 }
 

@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { ChatContext, ContextState } from '../types';
+import { ChatContext, ContextState, ParsedSpec } from '../types';
 import { EmbedContext } from '../types/contexts';
 
 /**
@@ -56,6 +56,103 @@ export class OpenAIService {
       console.error('OpenAI API error:', error);
       return this.getFallbackResponse(message, context, state);
     }
+  }
+
+  /**
+   * Analyze a parsed API spec and suggest potential application flows.
+   */
+  async analyzeSpecAndSuggestFlows(parsedSpec: ParsedSpec): Promise<string[]> {
+    if (!this.enabled || !this.openai) {
+      return this.getFallbackFlows(parsedSpec);
+    }
+
+    try {
+      const endpointSummary = parsedSpec.endpoints
+        .map(e => `${e.method} ${e.path} - ${e.summary || 'No summary'}`)
+        .slice(0, 20) // Limit for prompt size
+        .join('\n');
+
+      const modelSummary = parsedSpec.models
+        .map(m => m.name)
+        .slice(0, 20)
+        .join(', ');
+
+      const prompt = `Given the following API specification summary, suggest 3-5 high-level application flows or features that a developer could build.
+
+Endpoints:
+${endpointSummary}
+
+Models:
+${modelSummary}
+
+Based on this API, what are some useful UI flows or components to build?
+Examples: "A dashboard to view sales metrics", "A user profile page with an order history", "A product catalog with search and filtering".
+
+Respond ONLY with a valid JSON array of strings, where each string is a suggested flow. For example: ["flow 1", "flow 2"].
+Do not include any other text, markdown, or explanation.`;
+
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4-turbo-preview',
+        messages: [
+          { role: 'system', content: 'You are an expert API analyst. Your task is to suggest application ideas based on an API spec and return them as a JSON array.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.5,
+        max_tokens: 500,
+      });
+
+      const responseContent = completion.choices[0]?.message?.content;
+      if (!responseContent) {
+        return this.getFallbackFlows(parsedSpec);
+      }
+
+      try {
+        const suggestions = JSON.parse(responseContent);
+        if (Array.isArray(suggestions) && suggestions.every(s => typeof s === 'string')) {
+          return suggestions;
+        }
+      } catch (e) {
+        console.error("Failed to parse AI suggestions as JSON array:", e);
+      }
+
+      return this.getFallbackFlows(parsedSpec);
+
+    } catch (error) {
+      console.error('OpenAI API error during flow suggestion:', error);
+      return this.getFallbackFlows(parsedSpec);
+    }
+  }
+
+  private getFallbackFlows(parsedSpec: ParsedSpec): string[] {
+    const flows = new Set<string>();
+    const keywords = {
+      'dashboard': ['metric', 'analytic', 'summary', 'report'],
+      'catalog': ['product', 'item', 'listing'],
+      'management': ['user', 'order', 'customer', 'account'],
+      'form': ['create', 'new', 'add'],
+    };
+
+    const allPaths = parsedSpec.endpoints.map(e => e.path).join(' ').toLowerCase();
+
+    if (keywords.dashboard.some(k => allPaths.includes(k))) {
+      flows.add('Create a dashboard to view key metrics');
+    }
+    if (keywords.catalog.some(k => allPaths.includes(k))) {
+      flows.add('Build a product catalog with search and filtering');
+    }
+    if (keywords.management.some(k => allPaths.includes(k))) {
+      const resource = keywords.management.find(k => allPaths.includes(k)) || 'item';
+      flows.add(`Build a ${resource} management interface`);
+    }
+    if (parsedSpec.endpoints.some(e => e.method === 'POST')) {
+        flows.add(`Create a form to add a new resource`);
+    }
+
+    if (flows.size === 0 && parsedSpec.endpoints.length > 0) {
+      return ['Build a UI to interact with the API endpoints.'];
+    }
+
+    return Array.from(flows);
   }
 
   /**
