@@ -1,35 +1,7 @@
-"use node"; // Specify that this function runs in a Node.js environment
-
 import { v } from "convex/values";
-import { action, internalAction, internalMutation, query } from "./_generated/server";
+import { action, internalMutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import SwaggerParser = require("swagger-parser");
-import { ParsedSpec, Endpoint, Model, AuthMethod, Parameter, RequestBody, Response, Schema } from "../types";
 import { Id } from "./_generated/dataModel";
-
-// Helper class for parsing, moved to the backend
-class SpecParser {
-  async parse(content: any): Promise<ParsedSpec> {
-    const api = await SwaggerParser.validate(content, {
-      dereference: { circular: "ignore" },
-    });
-    return {
-      endpoints: this.parseEndpoints(api.paths),
-      models: this.parseModels(api.components?.schemas),
-      authMethods: this.parseAuthMethods(api.components?.securitySchemes),
-      baseUrl: api.servers?.[0]?.url || "",
-    };
-  }
-  private parseEndpoints = (paths: any): Endpoint[] => Object.entries(paths || {}).flatMap(([path, pathItem]) => Object.entries(pathItem as object).map(([method, op]: [string, any]) => ({ id: op.operationId || `${method}-${path}`.replace(/[^a-zA-Z0-9]/g, "-"), path, method: method.toUpperCase(), summary: op.summary, description: op.description, parameters: this.parseParameters(op.parameters), requestBody: this.parseRequestBody(op.requestBody), responses: this.parseResponses(op.responses), tags: op.tags, })));
-  private parseModels = (schemas: any): Model[] => Object.entries(schemas || {}).map(([name, schema]: [string, any]) => ({ name, description: schema.description, properties: this.parseProperties(schema.properties), required: schema.required || [], }));
-  private parseAuthMethods = (schemes: any): AuthMethod[] => Object.entries(schemes || {}).map(([name, s]: [string, any]) => ({ type: s.type === "http" ? (s.scheme === "bearer" ? "bearer" : "basic") : s.type, name: s.name || name, in: s.in, }));
-  private parseParameters = (params: any[] = []): Parameter[] => params.map(p => ({ name: p.name, in: p.in, description: p.description, required: p.required || false, schema: this.parseSchema(p.schema), }));
-  private parseRequestBody = (body: any): RequestBody | undefined => body ? { description: body.description, required: body.required || false, content: this.parseContent(body.content), } : undefined;
-  private parseResponses = (responses: any): Response[] => Object.entries(responses || {}).map(([statusCode, r]: [string, any]) => ({ statusCode, description: r.description || "", content: this.parseContent(r.content), }));
-  private parseContent = (content: any): any => { const jsonType = Object.keys(content || {}).find(mt => mt.includes("json")); return jsonType ? { [jsonType]: { schema: this.parseSchema(content[jsonType].schema) } } : undefined; };
-  private parseSchema = (schema: any): Schema => schema ? { type: schema.type || "object", description: schema.description, format: schema.format, required: schema.required, enum: schema.enum, properties: this.parseProperties(schema.properties), items: schema.items ? this.parseSchema(schema.items) : undefined, } : { type: "any" };
-  private parseProperties = (props: any): any => props ? Object.fromEntries(Object.entries(props).map(([name, schema]) => [name, this.parseSchema(schema)])) : {};
-}
 
 // Public action the client calls to start the parsing process
 export const parseSpec = action({
@@ -49,30 +21,12 @@ export const parseSpec = action({
       userId: args.sessionId,
     });
 
-    await ctx.scheduler.runAfter(0, internal.specs.performParsing, {
+    await ctx.scheduler.runAfter(0, (internal as any).specs_node.performParsing, {
       specId,
       content: args.content,
     });
 
     return specId;
-  },
-});
-
-// Internal action to do the heavy lifting of parsing
-export const performParsing = internalAction({
-  args: { specId: v.id("specs"), content: v.any() },
-  handler: async (ctx, args) => {
-    const parser = new SpecParser();
-    try {
-      const parsed = await parser.parse(args.content);
-      await ctx.runMutation(internal.specs.updateWithParsedData, {
-        specId: args.specId,
-        parsed,
-      });
-    } catch (error: any) {
-      console.error(`Failed to parse spec ${args.specId}:`, error);
-      // Optionally, update the spec with an error state
-    }
   },
 });
 
@@ -113,7 +67,7 @@ export const get = query({
   },
 });
 
-// Public mutation to save an API key
+// Public action to save an API key
 export const setApiKey = action({
     args: { id: v.id("specs"), apiKey: v.string() },
     handler: async (ctx, args) => {
