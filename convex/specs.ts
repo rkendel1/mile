@@ -3,7 +3,7 @@
 import { v } from "convex/values";
 import { action, internalAction, internalMutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import SwaggerParser from "swagger-parser";
+import SwaggerParser = require("swagger-parser");
 import { ParsedSpec, Endpoint, Model, AuthMethod, Parameter, RequestBody, Response, Schema } from "../types";
 import { Id } from "./_generated/dataModel";
 
