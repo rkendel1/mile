@@ -8,7 +8,11 @@
  * @module
  */
 
-import { anyApi, componentsGeneric } from "convex/server";
+import {
+  buildApi,
+  buildInternalApi,
+} from "convex/server";
+import * as specs from "../specs.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -18,6 +22,9 @@ import { anyApi, componentsGeneric } from "convex/server";
  * const myFunctionReference = api.myModule.myFunction;
  * ```
  */
-export const api = anyApi;
-export const internal = anyApi;
-export const components = componentsGeneric();
+export const api = buildApi({
+  specs,
+});
+export const internal = buildInternalApi({
+  specs,
+});
