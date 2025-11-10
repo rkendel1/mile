@@ -1,6 +1,7 @@
 import { ChatMessage, ChatContext, ContextState } from '../types';
 import { EmbedContext } from '../types/contexts';
 import { openAIService } from './openai';
+import { goalPlannerService } from './goalPlanner';
 
 export class ChatService {
   private contextState: ContextState = {
@@ -21,6 +22,11 @@ export class ChatService {
     
     // Try OpenAI first, fallback to rule-based system
     try {
+      // If we are in the goal tab and a spec is loaded, use the specialized goal planner
+      if (context.activeTab === 'goal' && context.specId && state.specs[context.specId]) {
+        return await this.handleGoalPlanning(message, context, state);
+      }
+      
       const aiResponse = await openAIService.generateResponse(message, context, state, embedContext);
       return {
         response: aiResponse.response,
@@ -33,13 +39,12 @@ export class ChatService {
     }
   }
 
-  private processMessageFallback(
+  private async processMessageFallback(
     message: string,
     context: ChatContext,
     state: ContextState
-  ): { response: string; context: ChatContext; actions?: any[] } {
+  ): Promise<{ response: string; context: ChatContext; actions?: any[] }> {
     
-    const lowerMessage = message.toLowerCase();
     const activeTab = context.activeTab;
 
     // Route to appropriate handler based on active tab
@@ -48,7 +53,7 @@ export class ChatService {
         return this.handleSpecTab(message, context);
       
       case 'goal':
-        return this.handleGoalTab(message, context);
+        return await this.handleGoalPlanning(message, context, state);
       
       case 'test':
         return this.handleTestTab(message, context);
@@ -64,6 +69,50 @@ export class ChatService {
           response: "I'm here to help you build amazing experiences from your API specs. What would you like to do?",
           context,
         };
+    }
+  }
+
+  private async handleGoalPlanning(message: string, context: ChatContext, state: ContextState): Promise<any> {
+    if (!context.specId || !state.specs[context.specId]) {
+      return {
+        response: "Please select an API spec first before defining your goal.",
+        context: { ...context, activeTab: 'spec' },
+        actions: [{ type: 'switch-tab', tab: 'spec' }],
+      };
+    }
+
+    const spec = state.specs[context.specId];
+    
+    try {
+      // Generate plan using the AI-powered service
+      const plan = await goalPlannerService.generatePlan(message, spec);
+      
+      // Explain the plan to the user
+      const explanation = goalPlannerService.explainPlan(plan, spec);
+
+      const goalId = `goal-${Date.now()}`;
+      const newGoal = {
+        id: goalId,
+        description: message,
+        plan: plan,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+
+      return {
+        response: explanation,
+        context: { ...context, goalId: goalId },
+        actions: [
+          { type: 'create-goal', goal: newGoal },
+          { type: 'suggest-next-tab', tab: 'test' },
+        ],
+      };
+    } catch (error) {
+      console.error("Error during goal planning:", error);
+      return {
+        response: "I'm sorry, I had trouble creating a plan for that request. Could you try rephrasing it or being more specific?",
+        context,
+      };
     }
   }
 
@@ -93,49 +142,6 @@ export class ChatService {
     return {
       response: "Let's start by selecting or importing an API specification. Do you have a spec file ready?",
       context,
-    };
-  }
-
-  private handleGoalTab(message: string, context: ChatContext): any {
-    if (!context.specId) {
-      return {
-        response: "Please select an API spec first before defining your goal.",
-        context: { ...context, activeTab: 'spec' },
-        actions: [{ type: 'switch-tab', tab: 'spec' }],
-      };
-    }
-
-    const spec = this.contextState.specs[context.specId];
-    
-    // Analyze the goal
-    const lowerMessage = message.toLowerCase();
-    let uiType = 'custom';
-    
-    if (lowerMessage.includes('dashboard')) uiType = 'dashboard';
-    else if (lowerMessage.includes('form')) uiType = 'form';
-    else if (lowerMessage.includes('table') || lowerMessage.includes('list')) uiType = 'table';
-    else if (lowerMessage.includes('chart')) uiType = 'chart';
-
-    // Find relevant endpoints
-    const relevantEndpoints = spec.parsed.endpoints
-      .filter(ep => {
-        const epText = `${ep.path} ${ep.summary || ''} ${ep.description || ''}`.toLowerCase();
-        return message.split(' ').some(word => word.length > 3 && epText.includes(word));
-      })
-      .slice(0, 3);
-
-    return {
-      response: `Got it! To create a ${uiType}, I'll use the following endpoints:\n\n` +
-               relevantEndpoints.map((ep, idx) => 
-                 `${idx + 1}. ${ep.method} ${ep.path}${ep.summary ? ' - ' + ep.summary : ''}`
-               ).join('\n') + '\n\n' +
-               `I'll fetch data from these endpoints and bind them to your UI components. ` +
-               `Shall I generate a test plan and execute it?`,
-      context: { ...context, goalId: `goal-${Date.now()}` },
-      actions: [
-        { type: 'create-goal-plan', endpoints: relevantEndpoints.map(e => e.id), uiType },
-        { type: 'suggest-next-tab', tab: 'test' },
-      ],
     };
   }
 

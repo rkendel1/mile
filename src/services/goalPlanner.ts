@@ -1,170 +1,59 @@
-import { Goal, GoalPlan, UIStructure, FunctionBinding, DataFlow } from '../types';
+import { GoalPlan, APISpec } from '../types';
+import { openAIService } from './openai';
 
 export class GoalPlannerService {
-  generatePlan(description: string, endpoints: any[]): GoalPlan {
-    // AI-like logic to generate a plan based on user's goal description
-    // In production, this would use LLM API
-    
-    const plan: GoalPlan = {
-      endpoints: [],
-      dataFlow: [],
-      uiStructure: {
-        type: 'custom',
-        components: [],
-      },
-      functions: [],
-    };
-
-    // Analyze description for intent
-    const lowerDesc = description.toLowerCase();
-
-    // Determine UI type
-    if (lowerDesc.includes('dashboard') || lowerDesc.includes('metrics')) {
-      plan.uiStructure.type = 'dashboard';
-    } else if (lowerDesc.includes('form') || lowerDesc.includes('create') || lowerDesc.includes('update')) {
-      plan.uiStructure.type = 'form';
-    } else if (lowerDesc.includes('table') || lowerDesc.includes('list')) {
-      plan.uiStructure.type = 'table';
-    } else if (lowerDesc.includes('chart') || lowerDesc.includes('graph')) {
-      plan.uiStructure.type = 'chart';
+  async generatePlan(description: string, spec: APISpec): Promise<GoalPlan> {
+    // Use OpenAI to generate the plan
+    try {
+      const plan = await openAIService.generatePlanFromSpec(description, spec.parsed);
+      return plan;
+    } catch (error) {
+      console.error("AI plan generation failed, falling back to basic plan.", error);
+      return this.generateFallbackPlan(description, spec.parsed.endpoints);
     }
-
-    // Match relevant endpoints
-    plan.endpoints = this.matchEndpoints(description, endpoints);
-
-    // Generate data flow
-    plan.dataFlow = this.generateDataFlow(plan.endpoints, plan.uiStructure.type);
-
-    // Generate function bindings
-    plan.functions = this.generateFunctionBindings(plan.endpoints);
-
-    // Generate UI components
-    plan.uiStructure.components = this.generateUIComponents(plan.uiStructure.type, plan.endpoints);
-
-    return plan;
   }
 
-  private matchEndpoints(description: string, endpoints: any[]): string[] {
-    const matched: string[] = [];
-    const keywords = description.toLowerCase().split(' ');
+  private generateFallbackPlan(description: string, endpoints: any[]): GoalPlan {
+    // A very simple fallback if AI fails
+    const relevantEndpoints = endpoints
+      .filter(ep => {
+        const epText = `${ep.path} ${ep.summary || ''}`.toLowerCase();
+        return description.toLowerCase().split(' ').some(word => word.length > 3 && epText.includes(word));
+      })
+      .slice(0, 2);
 
-    endpoints.forEach((endpoint) => {
-      const endpointText = `${endpoint.path} ${endpoint.summary || ''} ${endpoint.description || ''}`.toLowerCase();
-      
-      // Check if endpoint is relevant to the description
-      const relevanceScore = keywords.filter(keyword => 
-        keyword.length > 3 && endpointText.includes(keyword)
-      ).length;
+    return {
+      endpoints: relevantEndpoints.map(ep => ep.id),
+      uiStructure: {
+        type: 'custom',
+        components: [{ id: 'main-component', type: 'div', props: {}, bindings: [] }],
+      },
+      functions: relevantEndpoints.map(ep => ({
+        name: `fetch_${ep.id.replace(/-/g, '_')}`,
+        endpoint: ep.id,
+        parameters: {},
+      })),
+      dataFlow: relevantEndpoints.map(ep => ({
+        source: ep.id,
+        target: 'main-component',
+      })),
+    };
+  }
 
-      if (relevanceScore > 0) {
-        matched.push(endpoint.id);
+  explainPlan(plan: GoalPlan, spec: APISpec): string {
+    let explanation = `Okay, I've created a plan to build this for you. Here's how I'll do it:\n\n`;
+    
+    explanation += `**1. UI Structure:**\nI'll create a main component structured as a **${plan.uiStructure.type}**. It will contain ${plan.uiStructure.components.length} sub-component(s).\n\n`;
+
+    explanation += `**2. API Endpoints:**\nTo get the data, I will use the following ${plan.endpoints.length} endpoint(s):\n`;
+    plan.functions.forEach((fn) => {
+      const endpoint = spec.parsed.endpoints.find(e => e.id === fn.endpoint);
+      if (endpoint) {
+        explanation += `   - \`${endpoint.method} ${endpoint.path}\` (for ${endpoint.summary || 'data retrieval'})\n`;
       }
     });
 
-    return matched.slice(0, 5); // Limit to top 5 most relevant
-  }
-
-  private generateDataFlow(endpointIds: string[], uiType: string): DataFlow[] {
-    const flows: DataFlow[] = [];
-    
-    endpointIds.forEach((endpointId, index) => {
-      flows.push({
-        source: endpointId,
-        target: `ui-component-${index}`,
-        transformation: 'map-to-props',
-      });
-    });
-
-    return flows;
-  }
-
-  private generateFunctionBindings(endpointIds: string[]): FunctionBinding[] {
-    return endpointIds.map((endpointId) => ({
-      name: `fetch_${endpointId.replace(/-/g, '_')}`,
-      endpoint: endpointId,
-      parameters: {},
-      onSuccess: 'updateUI',
-      onError: 'showError',
-    }));
-  }
-
-  private generateUIComponents(uiType: string, endpointIds: string[]): any[] {
-    const components: any[] = [];
-
-    switch (uiType) {
-      case 'dashboard':
-        components.push({
-          id: 'dashboard-container',
-          type: 'Container',
-          props: { layout: 'grid', columns: 2 },
-          bindings: [],
-          children: endpointIds.map((id, idx) => ({
-            id: `metric-card-${idx}`,
-            type: 'MetricCard',
-            props: { title: `Metric ${idx + 1}` },
-            bindings: [{ source: id, target: 'data', transform: 'identity' }],
-          })),
-        });
-        break;
-
-      case 'form':
-        components.push({
-          id: 'form-container',
-          type: 'Form',
-          props: { method: 'POST' },
-          bindings: endpointIds.map(id => ({ source: 'form-data', target: id, transform: 'serialize' })),
-          children: [
-            { id: 'submit-button', type: 'Button', props: { text: 'Submit' }, bindings: [] },
-          ],
-        });
-        break;
-
-      case 'table':
-        components.push({
-          id: 'data-table',
-          type: 'Table',
-          props: { sortable: true, filterable: true },
-          bindings: endpointIds.map(id => ({ source: id, target: 'rows', transform: 'flatten' })),
-        });
-        break;
-
-      case 'chart':
-        components.push({
-          id: 'chart-container',
-          type: 'Chart',
-          props: { type: 'line' },
-          bindings: endpointIds.map(id => ({ source: id, target: 'data', transform: 'to-chart-data' })),
-        });
-        break;
-
-      default:
-        components.push({
-          id: 'custom-container',
-          type: 'Container',
-          props: {},
-          bindings: [],
-        });
-    }
-
-    return components;
-  }
-
-  explainPlan(plan: GoalPlan): string {
-    let explanation = `I'll create a ${plan.uiStructure.type} using ${plan.endpoints.length} API endpoint(s).\n\n`;
-    
-    explanation += `**Endpoints to use:**\n`;
-    plan.endpoints.forEach((ep, idx) => {
-      explanation += `${idx + 1}. ${ep}\n`;
-    });
-
-    explanation += `\n**Data Flow:**\n`;
-    plan.dataFlow.forEach((flow, idx) => {
-      explanation += `${idx + 1}. ${flow.source} → ${flow.target}\n`;
-    });
-
-    explanation += `\n**UI Structure:**\n`;
-    explanation += `Type: ${plan.uiStructure.type}\n`;
-    explanation += `Components: ${plan.uiStructure.components.length}\n`;
+    explanation += `\nThis plan seems solid. Shall we proceed to the **Test** tab to validate these endpoints?`;
 
     return explanation;
   }

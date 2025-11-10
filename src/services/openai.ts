@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { ChatContext, ContextState, ParsedSpec } from '../types';
+import { ChatContext, ContextState, ParsedSpec, GoalPlan } from '../types';
 import { EmbedContext } from '../types/contexts';
 
 /**
@@ -55,6 +55,85 @@ export class OpenAIService {
     } catch (error) {
       console.error('OpenAI API error:', error);
       return this.getFallbackResponse(message, context, state);
+    }
+  }
+
+  /**
+   * Generate a GoalPlan from a user's goal and a parsed API spec.
+   */
+  async generatePlanFromSpec(goal: string, spec: ParsedSpec): Promise<GoalPlan> {
+    if (!this.enabled || !this.openai) {
+      throw new Error('OpenAI service is not enabled.');
+    }
+
+    const endpointSummary = spec.endpoints
+      .map(e => ({
+        id: e.id,
+        method: e.method,
+        path: e.path,
+        summary: e.summary,
+        description: e.description,
+      }))
+      .slice(0, 30); // Limit for prompt size
+
+    const prompt = `
+You are an expert AI software architect. Your task is to create an execution plan to build a UI component based on a user's goal and a provided API specification.
+
+User's Goal: "${goal}"
+
+API Specification Endpoints:
+${JSON.stringify(endpointSummary, null, 2)}
+
+Based on the user's goal and the available endpoints, create a detailed execution plan.
+
+Your response MUST be a valid JSON object that conforms to the GoalPlan interface:
+interface GoalPlan {
+  endpoints: string[]; // Array of endpoint IDs to use
+  dataFlow: { source: string; target: string; transformation?: string; }[];
+  uiStructure: {
+    type: 'dashboard' | 'form' | 'table' | 'chart' | 'custom';
+    components: { id: string; type: string; props: any; bindings: any[]; children?: any[] }[];
+  };
+  functions: { name: string; endpoint: string; parameters: any; onSuccess?: string; onError?: string; }[];
+}
+
+Instructions:
+1.  **endpoints**: Select the most relevant endpoint IDs from the provided list.
+2.  **uiStructure.type**: Determine the best top-level UI type (dashboard, form, table, etc.).
+3.  **uiStructure.components**: Define the necessary UI components.
+4.  **functions**: Create function bindings for the selected endpoints.
+5.  **dataFlow**: Describe how data from endpoints flows to UI components.
+
+Respond ONLY with the JSON object. Do not include any other text, markdown, or explanation.
+`;
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4-turbo-preview',
+        messages: [
+          { role: 'system', content: 'You are an AI architect that generates JSON execution plans.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.2,
+        max_tokens: 2000,
+        response_format: { type: 'json_object' },
+      });
+
+      const responseContent = completion.choices[0]?.message?.content;
+      if (!responseContent) {
+        throw new Error('OpenAI returned an empty response.');
+      }
+
+      const plan = JSON.parse(responseContent);
+      // Basic validation
+      if (plan.endpoints && plan.uiStructure) {
+        return plan as GoalPlan;
+      } else {
+        throw new Error('Generated plan is missing required fields.');
+      }
+    } catch (error) {
+      console.error('Error generating goal plan with OpenAI:', error);
+      throw new Error('Failed to generate a valid execution plan from the AI.');
     }
   }
 
